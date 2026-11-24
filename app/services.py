@@ -97,10 +97,15 @@ def query_supply(conn: sqlite3.Connection, month: str) -> dict[str, Any]:
 # 录入（整月覆盖或追加；同月行号唯一由主键兜底）
 # ---------------------------------------------------------------------------
 def _check_unique(rows: list[Any], label: str) -> None:
-    ids = [r.row_id for r in rows]
-    dup = sorted({i for i in ids if ids.count(i) > 1})
+    # 单次遍历 O(n) 查重，避免随批量行数平方级增长（核算规模只应与源表行数相关）。
+    seen: set[int] = set()
+    dup: set[int] = set()
+    for r in rows:
+        if r.row_id in seen:
+            dup.add(r.row_id)
+        seen.add(r.row_id)
     if dup:
-        raise AppError(422, f"{label}内存在重复行号: {dup}，同月行号必须唯一")
+        raise AppError(422, f"{label}内存在重复行号: {sorted(dup)}，同月行号必须唯一")
 
 
 def _bulk_upsert(
